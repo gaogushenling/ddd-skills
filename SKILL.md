@@ -21,6 +21,7 @@ Design and implement software using Domain-Driven Design with Hexagonal Architec
 | Domain Service | [references/domain-service.md](references/domain-service.md) |
 | Case layer orchestration | [references/case-layer.md](references/case-layer.md) |
 | Trigger layer | [references/trigger-layer.md](references/trigger-layer.md) |
+| Domain Service | [references/domain-service.md](references/domain-service.md) |
 | Project structure | [references/project-structure.md](references/project-structure.md) |
 | Naming conventions | [references/naming.md](references/naming.md) |
 | Docker Images | [references/docker-images.md](references/docker-images.md) |
