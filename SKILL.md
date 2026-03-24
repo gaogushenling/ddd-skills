@@ -23,6 +23,7 @@ Design and implement software using Domain-Driven Design with Hexagonal Architec
 | Trigger layer | [references/trigger-layer.md](references/trigger-layer.md) |
 | Project structure | [references/project-structure.md](references/project-structure.md) |
 | Naming conventions | [references/naming.md](references/naming.md) |
+| Docker Images | [references/docker-images.md](references/docker-images.md) |
 
 ## Architecture Layers
 
