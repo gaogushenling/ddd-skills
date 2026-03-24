@@ -18,9 +18,11 @@
 │   └── src/main/java/
 │       └── cn/{company}/domain/
 │           ├── {domain1}/
-│           │   ├── adapter/
-│           │   │   ├── port/         # Port interfaces
-│           │   │   └── repository/   # Repository interfaces
+│           │   ├── adapter/                    # ⭐ 适配器接口（定义在此层）
+│           │   │   ├── port/
+│           │   │   │   └── IProductPort.java   # 远程调用接口（HTTP/RPC）
+│           │   │   └── repository/
+│           │   │       └── IOrderRepository.java # 本地仓储接口（MySQL/Redis）
 │           │   ├── model/
 │           │   │   ├── aggregate/    # Aggregates
 │           │   │   ├── entity/       # Entities
@@ -36,12 +38,14 @@
 │   └── src/main/java/
 │       └── cn/{company}/infrastructure/
 │           ├── adapter/
-│           │   ├── port/             # Port implementations
-│           │   └── repository/       # Repository implementations
-│           ├── dao/                  # DAO interfaces
-│           ├── dataobject/           # PO classes
-│           ├── gateway/              # External service clients
-│           └── config/               # Configurations
+│           │   ├── port/                   # Port 实现（远程调用）
+│           │   │   └── ProductPort.java     # HTTP / RPC / WebSocket
+│           │   └── repository/              # Repository 实现（本地数据）
+│           │       └── OrderRepository.java # MySQL + Redis
+│           ├── dao/                        # DAO 接口（MyBatis Mapper）
+│           ├── dataobject/                 # PO 类
+│           ├── gateway/                    # 外部服务客户端
+│           └── config/                     # 配置类
 │
 ├── {project}-api/                   # API layer
 │   ├── pom.xml

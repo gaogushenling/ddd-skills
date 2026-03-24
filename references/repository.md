@@ -1,256 +1,260 @@
-# Repository Pattern Reference
+# Repository Pattern - 仓储模式
 
-## Table of Contents
+## 概述
 
-1. [What is a Repository](#1-what-is-a-repository)
-2. [Interface Definition](#2-interface-definition)
-3. [Implementation](#3-implementation)
-4. [Object Conversion](#4-object-conversion)
-5. [Query Patterns](#5-query-patterns)
-6. [Best Practices](#6-best-practices)
+Repository（仓储）是领域层与本地数据存储之间的桥梁。
 
----
+## 核心职责
 
-## 1. What is a Repository
+| 职责 | 说明 |
+|------|------|
+| **MySQL** | 数据库 CRUD 操作 |
+| **Redis** | 缓存读写 |
+| **Config** | 配置中心读取 |
+| **本地文件** | 本地文件读写 |
 
-A Repository:
-- Mediates between domain and persistence
-- Provides collection-like interface
-- Hides persistence details
-- Works with aggregates
+**原则**：Repository 只操作**本地数据**，不进行远程调用。
 
-### Key Principles
-
-| Principle | Description |
-|-----------|-------------|
-| Collection semantics | Treat as in-memory collection |
-| Aggregate focused | One repository per aggregate |
-| Interface in Domain | Domain defines, Infrastructure implements |
-| No business logic | Only persistence operations |
-
----
-
-## 2. Interface Definition
-
-### Location
-
-**Domain Layer** - Define interface here
+## 命名规范
 
 ```
-domain/
+Domain 层：I{Xxx}Repository.java
+Infrastructure 层：XxxRepository.java（无 Impl 后缀）
+```
+
+## 目录结构
+
+```
+Domain 层/
 └── {domain}/
     └── adapter/
         └── repository/
-            └── I{Domain}Repository.java
+            └── I{Domain}Repository.java    ← 接口定义
+
+Infrastructure 层/
+└── adapter/
+    └── repository/
+        └── {Domain}Repository.java         ← 实现
 ```
 
-### Template
+## 接口定义
 
 ```java
 /**
- * {Domain} Repository Interface
+ * {Domain}仓储接口
  * 
- * Provides persistence operations for {Domain}Aggregate.
- * Defined in Domain layer, implemented in Infrastructure.
+ * 职责：本地数据访问（MySQL / Redis / Config）
+ * 定义在 Domain 层，实现 在 Infrastructure 层
  */
 public interface I{Domain}Repository {
 
-    // ==================== Single Operations ====================
+    // ==================== 单条操作 ====================
     
     /**
-     * Find by ID
+     * 根据ID查询
      */
     {Domain}Aggregate findById(Long id);
     
     /**
-     * Find by business ID
+     * 根据业务ID查询
      */
     {Domain}Aggregate findByBizId(String bizId);
     
     /**
-     * Save (create)
+     * 保存（新增）
      */
     void save({Domain}Aggregate aggregate);
     
     /**
-     * Update
+     * 更新
      */
     void update({Domain}Aggregate aggregate);
     
     /**
-     * Delete
+     * 删除
      */
     void delete(Long id);
 
-    // ==================== Batch Operations ====================
+    // ==================== 批量操作 ====================
     
     /**
-     * Batch save
+     * 批量保存
      */
     void batchSave(List<{Domain}Aggregate> aggregates);
     
     /**
-     * Find by IDs
+     * 根据ID列表查询
      */
     List<{Domain}Aggregate> findByIds(List<Long> ids);
 
-    // ==================== Query Operations ====================
+    // ==================== 条件查询 ====================
     
     /**
-     * Find by condition
+     * 条件查询
      */
     List<{Domain}Aggregate> findByCondition({Query}Entity query);
     
     /**
-     * Paginated query
+     * 分页查询
      */
     PageResult<{Domain}Aggregate> findPage({Query}Entity query, int page, int size);
-    
-    /**
-     * Count
-     */
-    long count({Query}Entity query);
 }
 ```
 
-### Complete Example
+## 实现模板
 
 ```java
 /**
- * Order Repository Interface
- */
-public interface IOrderRepository {
-    
-    // Single operations
-    OrderAggregate findById(Long id);
-    OrderAggregate findByOrderId(String orderId);
-    void save(OrderAggregate aggregate);
-    void update(OrderAggregate aggregate);
-    void delete(Long id);
-    
-    // Query operations
-    List<OrderAggregate> findByUserId(Long userId);
-    List<OrderAggregate> findByStatus(OrderStatusEnum status);
-    List<OrderAggregate> findPendingOrders();
-    PageResult<OrderAggregate> findPage(OrderQuery query, int page, int size);
-    
-    // Existence check
-    boolean existsByOrderId(String orderId);
-}
-```
-
----
-
-## 3. Implementation
-
-### Location
-
-**Infrastructure Layer** - Implement here
-
-```
-infrastructure/
-└── adapter/
-    └── repository/
-        └── {Domain}RepositoryImpl.java
-```
-
-### Template
-
-```java
-/**
- * {Domain} Repository Implementation
+ * {Domain}Repository
+ * 
+ * 职责：本地数据访问（MySQL + Redis）
  */
 @Slf4j
 @Repository
-public class {Domain}RepositoryImpl implements I{Domain}Repository {
+public class {Domain}Repository implements I{Domain}Repository {
 
     @Resource
     private I{Domain}Dao {domain}Dao;
     
     @Resource
-    private I{Item}Dao itemDao;
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    private static final String CACHE_KEY_PREFIX = "{domain}:";
+    private static final Duration CACHE_EXPIRE = Duration.ofHours(24);
 
     @Override
     public {Domain}Aggregate findById(Long id) {
-        // 1. Query main table
+        // 1. 查询缓存
+        String cacheKey = CACHE_KEY_PREFIX + "id:" + id;
+        {Domain}Aggregate cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            log.debug("缓存命中, id={}", id);
+            return cached;
+        }
+        
+        // 2. 缓存未命中，查询 MySQL
         {PO} po = {domain}Dao.selectById(id);
         if (po == null) {
             return null;
         }
         
-        // 2. Query related tables
-        List<{ItemPO}> itemPOs = itemDao.selectByMainId(id);
+        // 3. 转换并回填缓存
+        {Domain}Aggregate aggregate = toAggregate(po);
+        redisTemplate.opsForValue().set(cacheKey, aggregate, CACHE_EXPIRE);
         
-        // 3. Convert to aggregate
-        return toAggregate(po, itemPOs);
+        return aggregate;
+    }
+
+    @Override
+    public {Domain}Aggregate findByBizId(String bizId) {
+        {PO} po = {domain}Dao.selectByBizId(bizId);
+        if (po == null) {
+            return null;
+        }
+        return findById(po.getId());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void save({Domain}Aggregate aggregate) {
-        // 1. Save main table
-        {PO} po = toMainPO(aggregate);
+        {PO} po = toPO(aggregate);
         {domain}Dao.insert(po);
         
-        // 2. Save related tables
-        for ({Item}Entity item : aggregate.getItems()) {
-            {ItemPO} itemPO = toItemPO(item, po.getId());
-            itemDao.insert(itemPO);
-        }
+        // 更新缓存
+        String cacheKey = CACHE_KEY_PREFIX + "id:" + po.getId();
+        redisTemplate.opsForValue().set(cacheKey, aggregate, CACHE_EXPIRE);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update({Domain}Aggregate aggregate) {
-        // 1. Update main table
-        {PO} po = toMainPO(aggregate);
+        {PO} po = toPO(aggregate);
         int count = {domain}Dao.update(po);
         if (count != 1) {
-            throw new BusinessException("Update failed, record not found");
+            throw new BusinessException("更新失败，记录不存在");
         }
         
-        // 2. Update related tables (strategy depends on requirements)
-        // Option A: Delete and re-insert
-        // Option B: Diff and update
+        // 删除缓存（Cache Aside 模式）
+        String cacheKey = CACHE_KEY_PREFIX + "id:" + aggregate.getId();
+        redisTemplate.delete(cacheKey);
     }
 
-    // ==================== Conversion Methods ====================
-    
-    private {Domain}Aggregate toAggregate({PO} po, List<{ItemPO}> itemPOs) {
-        return {Domain}Aggregate.builder()
-            .root(toEntity(po))
-            .items(toItems(itemPOs))
-            .build();
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        {domain}Dao.deleteById(id);
+        
+        // 删除缓存
+        String cacheKey = CACHE_KEY_PREFIX + "id:" + id;
+        redisTemplate.delete(cacheKey);
     }
+
+    @Override
+    public PageResult<{Domain}Aggregate> findPage({Query}Entity query, int page, int size) {
+        int offset = (page - 1) * size;
+        
+        // MySQL 分页查询
+        List<{PO}> pos = {domain}Dao.selectPage(query, offset, size);
+        long total = {domain}Dao.count(query);
+        
+        // 转换
+        List<{Domain}Aggregate> aggregates = pos.stream()
+            .map(this::toAggregate)
+            .collect(Collectors.toList());
+        
+        return PageResult.of(aggregates, total, page, size);
+    }
+
+    // ==================== 转换方法 ====================
     
-    private {Domain}Entity toEntity({PO} po) {
-        return {Domain}Entity.builder()
+    private {Domain}Aggregate toAggregate({PO} po) {
+        return {Domain}Aggregate.builder()
             .id(po.getId())
             .bizId(po.getBizId())
             .status(StatusEnum.valueOf(po.getStatus()))
             .build();
     }
     
-    private {PO} toMainPO({Domain}Aggregate aggregate) {
-        {PO}.Builder builder = {PO}.builder()
+    private {PO} toPO({Domain}Aggregate aggregate) {
+        return {PO}.builder()
+            .id(aggregate.getId())
             .bizId(aggregate.getBizId())
-            .status(aggregate.getStatus().getCode());
-        
-        if (aggregate.getId() != null) {
-            builder.id(aggregate.getId());
-        }
-        
-        return builder.build();
+            .status(aggregate.getStatus().getCode())
+            .build();
     }
 }
 ```
 
-### Complete Example
+## 完整示例
 
 ```java
+/**
+ * 订单仓储接口
+ */
+public interface IOrderRepository {
+    
+    // 单条操作
+    OrderAggregate findById(Long id);
+    OrderAggregate findByOrderId(String orderId);
+    void save(OrderAggregate aggregate);
+    void update(OrderAggregate aggregate);
+    void delete(Long id);
+    
+    // 条件查询
+    List<OrderAggregate> findByUserId(Long userId);
+    List<OrderAggregate> findByStatus(OrderStatusEnum status);
+    PageResult<OrderAggregate> findPage(OrderQuery query, int page, int size);
+    
+    // 存在性检查
+    boolean existsByOrderId(String orderId);
+}
+
+/**
+ * 订单仓储实现
+ */
 @Slf4j
 @Repository
-public class OrderRepositoryImpl implements IOrderRepository {
+public class OrderRepository implements IOrderRepository {
 
     @Resource
     private IOrderDao orderDao;
@@ -259,50 +263,44 @@ public class OrderRepositoryImpl implements IOrderRepository {
     private IOrderItemDao orderItemDao;
     
     @Resource
-    private IAddressDao addressDao;
+    private RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public OrderAggregate findById(Long id) {
+        // 1. 查缓存
+        String cacheKey = "order:id:" + id;
+        OrderAggregate cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // 2. 查 MySQL
         OrderPO orderPO = orderDao.selectById(id);
         if (orderPO == null) {
             return null;
         }
         
+        // 3. 查关联表
         List<OrderItemPO> itemPOs = orderItemDao.selectByOrderId(id);
-        AddressPO addressPO = addressDao.selectByOrderId(id);
         
-        return toAggregate(orderPO, itemPOs, addressPO);
-    }
-
-    @Override
-    public OrderAggregate findByOrderId(String orderId) {
-        OrderPO orderPO = orderDao.selectByOrderId(orderId);
-        if (orderPO == null) {
-            return null;
-        }
-        return findById(orderPO.getId());
+        // 4. 转换并缓存
+        OrderAggregate aggregate = toAggregate(orderPO, itemPOs);
+        redisTemplate.opsForValue().set(cacheKey, aggregate, Duration.ofHours(24));
+        
+        return aggregate;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void save(OrderAggregate aggregate) {
-        // Save order
+        // 1. 保存主表
         OrderPO orderPO = toOrderPO(aggregate);
         orderDao.insert(orderPO);
         
-        // Save items
+        // 2. 保存明细表
         for (OrderItemEntity item : aggregate.getItems()) {
             OrderItemPO itemPO = toItemPO(item, orderPO.getId());
             orderItemDao.insert(itemPO);
-        }
-        
-        // Save address
-        if (aggregate.getShippingAddress() != null) {
-            AddressPO addressPO = toAddressPO(
-                aggregate.getShippingAddress(), 
-                orderPO.getId()
-            );
-            addressDao.insert(addressPO);
         }
     }
 
@@ -312,16 +310,11 @@ public class OrderRepositoryImpl implements IOrderRepository {
         OrderPO orderPO = toOrderPO(aggregate);
         int count = orderDao.update(orderPO);
         if (count != 1) {
-            throw new BusinessException("Order not found: " + aggregate.getOrderId());
+            throw new BusinessException("订单不存在: " + aggregate.getOrderId());
         }
-    }
-
-    @Override
-    public List<OrderAggregate> findByUserId(Long userId) {
-        List<OrderPO> orderPOs = orderDao.selectByUserId(userId);
-        return orderPOs.stream()
-            .map(po -> findById(po.getId()))
-            .collect(Collectors.toList());
+        
+        // 删除缓存
+        redisTemplate.delete("order:id:" + aggregate.getId());
     }
 
     @Override
@@ -337,15 +330,12 @@ public class OrderRepositoryImpl implements IOrderRepository {
         return PageResult.of(aggregates, total, page, size);
     }
 
-    // ==================== Conversions ====================
+    // ==================== 转换方法 ====================
     
-    private OrderAggregate toAggregate(OrderPO orderPO, 
-                                        List<OrderItemPO> itemPOs,
-                                        AddressPO addressPO) {
+    private OrderAggregate toAggregate(OrderPO orderPO, List<OrderItemPO> itemPOs) {
         return OrderAggregate.builder()
             .order(toOrderEntity(orderPO))
             .items(toItemEntities(itemPOs))
-            .shippingAddress(addressPO != null ? toAddressVO(addressPO) : null)
             .build();
     }
     
@@ -356,7 +346,6 @@ public class OrderRepositoryImpl implements IOrderRepository {
             .userId(po.getUserId())
             .status(OrderStatusEnum.valueOf(po.getStatus()))
             .totalAmount(po.getTotalAmount())
-            .createdAt(po.getCreatedAt())
             .build();
     }
     
@@ -373,110 +362,68 @@ public class OrderRepositoryImpl implements IOrderRepository {
 }
 ```
 
----
-
-## 4. Object Conversion
-
-### Conversion Direction
+## 对象转换规则
 
 ```
-Domain Object (Aggregate/Entity/VO)
-          ↕
+Domain Object (Aggregate / Entity / VO)
+              ↕
 Persistence Object (PO)
 ```
 
-### Rules
+| 转换方向 | 方法 | 说明 |
+|----------|------|------|
+| Aggregate → PO | `toPO()` | `save()` / `update()` 时调用 |
+| PO → Aggregate | `toAggregate()` | `findById()` 时调用 |
+| Entity → PO | 私有方法 | 内部转换 |
+| PO → Entity | 私有方法 | 内部转换 |
 
-| From | To | Where |
-|------|-----|-------|
-| Aggregate | PO | Repository.save() |
-| PO | Aggregate | Repository.findById() |
-| Entity | PO | Private helper |
-| PO | Entity | Private helper |
+## 最佳实践
 
-### Never
-
-- ❌ Return PO from Repository
-- ❌ Pass PO to Domain Service
-- ❌ Mix PO and Entity in business logic
-
----
-
-## 5. Query Patterns
-
-### Specification Pattern
+### ✅ 推荐
 
 ```java
-// Query object
-@Data
-@Builder
-public class OrderQuery {
-    private Long userId;
-    private OrderStatusEnum status;
-    private LocalDateTime startTime;
-    private LocalDateTime endTime;
-}
-
-// Repository
-List<OrderAggregate> findByCondition(OrderQuery query);
-```
-
-### Pagination
-
-```java
-@Getter
-public class PageResult<T> {
-    private final List<T> data;
-    private final long total;
-    private final int page;
-    private final int size;
-    private final int totalPages;
-    
-    public static <T> PageResult<T> of(List<T> data, long total, int page, int size) {
-        return new PageResult<>(data, total, page, size, (int) Math.ceil((double) total / size));
-    }
-}
-```
-
----
-
-## 6. Best Practices
-
-### Do
-
-```java
-// ✅ Interface in Domain
+// ✅ 接口定义在 Domain 层
 public interface IOrderRepository {
     OrderAggregate findById(Long id);
 }
 
-// ✅ Implementation in Infrastructure
+// ✅ 实现在 Infrastructure 层
 @Repository
-public class OrderRepositoryImpl implements IOrderRepository { }
+public class OrderRepository implements IOrderRepository { }
 
-// ✅ Work with aggregates
+// ✅ 操作聚合根
 void save(OrderAggregate aggregate);
 
-// ✅ Use meaningful names
+// ✅ 语义化命名
 List<OrderAggregate> findPendingOrders();
 ```
 
-### Don't
+### ❌ 避免
 
 ```java
-// ❌ Don't return PO
+// ❌ 返回 PO
 OrderPO findById(Long id);
 
-// ❌ Don't put business logic
+// ❌ 包含业务逻辑
 public void save(OrderAggregate aggregate) {
-    if (aggregate.getTotal() > 10000) { // ❌ Business logic
-        throw new BusinessException("Too large");
+    if (aggregate.getTotal() > 10000) {
+        throw new BusinessException("金额过大");  // ❌ 业务逻辑
     }
 }
 
-// ❌ Don't expose DAO directly
+// ❌ 暴露 DAO
 IOrderDao getOrderDao();
 
-// ❌ Don't use generic methods
-<T> T find(String query);  // Too generic
+// ❌ 通用方法
+<T> T find(String query);  // ❌ 过于通用
 ```
+
+## Repository vs Port
+
+| 维度 | Repository | Port |
+|------|-----------|------|
+| **职责** | 本地数据访问 | 远程服务调用 |
+| **数据源** | MySQL、Redis、Config | HTTP、RPC、WebSocket |
+| **命名** | `I{Xxx}Repository` | `I{Xxx}Port` |
+| **实现** | `XxxRepository` | `XxxPort` |
+| **示例** | 用户信息查询 | 用户信息远程校验 |
