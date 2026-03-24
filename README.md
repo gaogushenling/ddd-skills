@@ -24,7 +24,7 @@
 | 值对象设计 | [references/value-object.md](references/value-object.md) |
 | 仓储模式 | [references/repository.md](references/repository.md) |
 | 端口与适配器 | [references/port-adapter.md](references/port-adapter.md) |
-| **业务编排层** | [references/case-layer.md](references/case-layer.md) |
+| 业务编排层 | [references/case-layer.md](references/case-layer.md) |
 | 触发层设计 | [references/trigger-layer.md](references/trigger-layer.md) |
 | 项目结构 | [references/project-structure.md](references/project-structure.md) |
 | 命名规范 | [references/naming.md](references/naming.md) |
@@ -129,8 +129,8 @@ public class OrderCaseServiceImpl implements IOrderCaseService {
 
 ## 参考项目
 
-- [group-buy-market](file:///Users/fuzhengwei/Documents/project/ddd-demo/group-buy-market) - 电商领域完整实现
-- [ai-mcp-gateway](file:///Users/fuzhengwei/Documents/project/ddd-demo/ai-mcp-gateway) - API 网关领域完整实现
+- [group-buy-market](https://bugstack.cn/md/project/group-buy-market/group-buy-market.html) - 拼团领域完整实现
+- [ai-mcp-gateway](https://bugstack.cn/md/project/ai-mcp-gateway/ai-mcp-gateway.html) - AI MCP 网关领域完整实现
 
 ## 安装说明
 
