@@ -1,7 +1,7 @@
 ---
 name: ddd-skills
 version: 2.0.0
-description: "Use this skill whenever you need to design or implement software using Domain-Driven Design (DDD) with Hexagonal Architecture. Triggers include 'DDD', 'domain-driven design', 'hexagonal architecture', 'ports and adapters', '六边形架构', '领域驱动设计'. Use when creating Entity, Aggregate, Value Object, Repository, Domain Service, or implementing business logic. Also use when setting up project structure for DDD, implementing rich domain models, or need guidance on layer responsibilities (Trigger/API/Case/Domain/Infrastructure). Do not use for simple CRUD applications, microservices without domain complexity, or general Spring Boot patterns without DDD."
+description: "DDD 六边形架构设计与开发技能包。当你需要设计或实现 DDD 领域驱动设计项目时使用，包括：六边形架构、端口与适配器、领域层设计（Entity/Aggregate/Value Object/Repository/Domain Service）、业务编排层（Case Layer）、触发层（Trigger Layer）、基础设施层（Infrastructure Layer）。触发词：'DDD'、'六边形架构'、'领域驱动设计'、'创建 DDD 项目'、'新建项目'。不要用于简单 CRUD 应用或没有领域复杂度的微服务。@小傅哥"
 author: xiaofuge
 license: MIT
 triggers:
