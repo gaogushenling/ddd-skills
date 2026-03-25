@@ -33,11 +33,29 @@ Design and implement software using Domain-Driven Design with Hexagonal Architec
 
 **⚠️ 环境提醒**: 建议提前安装 JDK 17+ 和 Maven 3.8.*，脚本启动时会自动检测并给出各平台安装指引，未安装也可继续但可能导致生成失败。
 
+**⚠️ 重要提醒：必须询问用户项目创建地址**
+
+**在创建项目前，如果用户没有明确给出工程创建地址，必须询问用户在哪里创建项目。** 不能随意创建到默认目录，必须获得用户确认。
+
+示例对话：
+```
+用户：帮我创建一个 DDD 项目
+AI：好的，我来帮您创建 DDD 项目。请问您希望将项目创建在哪个目录？
+     例如：
+     1) /Users/xxx/projects
+     2) /Users/xxx/Documents
+     3) /home/xxx/workspace
+     4) 其他路径（请直接输入）
+
+用户：创建在 /Users/xxx/projects 下
+AI：确认在 /Users/xxx/projects 下创建项目，开始执行...
+```
+
 **流程:**
 
-1. **第一步：选择项目生成目录**
+1. **第一步：确认项目创建目录**
 
-   脚本会自动扫描可写目录（当前工作目录、用户 home 目录、home/workspace、home/Documents/projects 等），列出选项供用户选择，或输入自定义绝对路径。
+   **必须询问用户**，如果用户未指定，列出可选项供用户选择。
 
    示例：
    ```
@@ -72,6 +90,7 @@ bash scripts/create-ddd-project.sh
 
 > ⚠️ **必须先 cd 到 `ddd-skills-v2` 项目目录下再执行**，脚本会自动定位自身路径。
 > AI 负责引导用户选择目录、填写参数，无需手动拼凑 Maven 命令。
+> **⚠️ 再次强调：创建项目前必须询问用户项目创建地址，不能随意创建！**
 
 ---
 
