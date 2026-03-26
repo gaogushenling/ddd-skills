@@ -134,6 +134,8 @@ bash scripts/create-ddd-project.sh
 | Case layer orchestration | [references/case-layer.md](references/case-layer.md) |
 | Trigger layer | [references/trigger-layer.md](references/trigger-layer.md) |
 | Infrastructure layer | [references/infrastructure-layer.md](references/infrastructure-layer.md) |
+| **Domain 层核心模式** | **[references/domain-patterns.md](references/domain-patterns.md)** |
+| **Infrastructure 层核心模式** | **[references/infrastructure-patterns.md](references/infrastructure-patterns.md)** |
 | **DevOps 部署** | **[references/devops-deployment.md](references/devops-deployment.md)** |
 | Project structure | [references/project-structure.md](references/project-structure.md) |
 | Naming conventions | [references/naming.md](references/naming.md) |
