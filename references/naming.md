@@ -23,17 +23,18 @@
 | Repository Interface | `I{Domain}Repository` | `IOrderRepository` |
 | Repository Impl | `{Domain}Repository` | `OrderRepository` |
 | Port Interface | `I{Domain}Port` | `INotificationPort` |
-| Port Impl | `{Domain}PortImpl` | `NotificationPortImpl` |
+| Port Impl | `{Domain}Port` | `NotificationPort` |
 | Domain Service Interface | `I{Domain}Service` | `IOrderService` |
 | Domain Service Impl | `{Domain}ServiceImpl` | `OrderServiceImpl` |
-| Case Service | `{Domain}CaseService` | `OrderCaseService` |
+| Case Interface | `I{Domain}Case` | `IOrderCase` |
+| Case Impl | `{Domain}CaseImpl` | `OrderCaseImpl` |
 | Controller | `{Domain}Controller` | `OrderController` |
 | MQ Listener | `{Domain}Listener` | `OrderListener` |
 | Job | `{Domain}Job` | `OrderJob` |
 | DAO | `I{Domain}Dao` | `IOrderDao` |
 | PO | `{Domain}PO` | `OrderPO` |
-| Request DTO | `{Domain}Request` | `CreateOrderRequest` |
-| Response DTO | `{Domain}Response` | `OrderResponse` |
+| API Request DTO | `{Xxx}RequestDTO` | `CreateOrderRequestDTO` |
+| API Response DTO | `{Xxx}ResponseDTO` | `OrderResponseDTO` |
 
 ## Method Naming
 
@@ -85,7 +86,7 @@ public class MoneyVO { }
 public interface IOrderRepository { }
 
 // Repository Implementation
-public class OrderRepositoryImpl implements IOrderRepository { }
+public class OrderRepository implements IOrderRepository { }
 
 // Domain Service
 public interface IOrderService { }
@@ -93,7 +94,11 @@ public class OrderServiceImpl implements IOrderService { }
 
 // Port
 public interface INotificationPort { }
-public class NotificationPortImpl implements INotificationPort { }
+public class NotificationPort implements INotificationPort { }
+
+// Case
+public interface IOrderCase { }
+public class OrderCaseImpl implements IOrderCase { }
 
 // Controller
 public class OrderController { }
@@ -103,4 +108,36 @@ public class OrderListener { }
 
 // Job
 public class OrderJob { }
+
+// API DTO（必须以 DTO 结尾）
+public class CreateOrderRequestDTO { }
+public class OrderResponseDTO { }
 ```
+
+## DTO 命名规范
+
+**API 层（api 模块）的 DTO 必须以 `DTO` 结尾：**
+
+```java
+// ✅ 正确
+public class CreateOrderRequestDTO { }
+public class OrderResponseDTO { }
+public class QueryOrderRequestDTO { }
+
+// ❌ 错误
+public class CreateOrderRequest { }   // 缺少 DTO 后缀
+public class OrderResponse { }        // 缺少 DTO 后缀
+public class OrderVO { }              // VO 是领域层值对象，不是 API DTO
+```
+
+**各层对象命名对比：**
+
+| 层 | 对象类型 | 命名规范 | 示例 |
+|----|---------|---------|------|
+| API 层 | 请求对象 | `{Xxx}RequestDTO` | `CreateOrderRequestDTO` |
+| API 层 | 响应对象 | `{Xxx}ResponseDTO` | `OrderResponseDTO` |
+| Domain 层 | 值对象 | `{Xxx}VO` | `OrderStatusVO` |
+| Domain 层 | 实体 | `{Xxx}Entity` | `OrderEntity` |
+| Domain 层 | 命令实体 | `{Xxx}CommandEntity` | `CreateOrderCommandEntity` |
+| Infrastructure 层 | 持久化对象 | `{Xxx}PO` | `OrderPO` |
+| Infrastructure 层 | Gateway DTO | `{Xxx}RequestDTO` / `{Xxx}ResponseDTO` | `PayRequestDTO` |

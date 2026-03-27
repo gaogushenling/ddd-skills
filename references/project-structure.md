@@ -58,19 +58,20 @@
 │   ├── pom.xml
 │   └── src/main/java/
 │       └── cn/{company}/api/
-│           ├── I{Domain}Service.java # RPC interfaces
-│           ├── dto/                  # DTOs
-│           └── error/                # Error codes
+│           ├── I{Domain}Service.java          # RPC 接口定义
+│           ├── dto/                            # DTO 对象（必须以 DTO 结尾）
+│           │   ├── {Xxx}RequestDTO.java        # 请求 DTO
+│           │   └── {Xxx}ResponseDTO.java       # 响应 DTO
+│           └── error/                          # 错误码定义
 │
 ├── {project}-case/                  # Case layer
 │   ├── pom.xml
 │   └── src/main/java/
 │       └── cn/{company}/cases/
 │           └── {domain}/
-│               ├── I{Domain}CaseService.java
-│               ├── impl/
-│               ├── node/            # 复杂流程节点
-│               └── factory/         # 流程工厂
+│               ├── I{Xxx}Case.java             # Case 接口（I{Xxx}Case 命名）
+│               └── impl/
+│                   └── {Xxx}CaseImpl.java      # Case 实现（{Xxx}CaseImpl 命名）
 │
 ├── {project}-trigger/               # Trigger layer
 │   ├── pom.xml

@@ -11,7 +11,7 @@
 
 ```
 {infrastructure-module}/
-├── adapter/                              # 适配器实现
+├── adapter/                              # 适配器实现（实现领域层定义的接口）
 │   ├── port/                             # Port 实现（远程调用）
 │   │   └── XxxPort.java                  # 实现领域层定义的 IPort 接口，调用 gateway
 │   └── repository/                       # Repository 实现（本地数据）
@@ -25,8 +25,9 @@
 │   │   ├── XxxRequestDTO.java
 │   │   └── XxxResponseDTO.java
 │   └── XxxGateway.java                   # HTTP 服务客户端
-├── redis/                                # Redis 配置和工具
-└── config/                               # 配置类
+├── redis/                                # Redis 操作（RedisTemplate 封装）
+│   └── IRedisService.java / RedisService.java
+└── config/                               # Spring 配置类（线程池、OkHttp 等）
 
 {app-module}/src/main/resources/
 └── mybatis/
@@ -34,11 +35,21 @@
         └── xxx_mapper.xml
 ```
 
-**重要规范说明：**
-- **dao 包**：包含 PO 对象和 DAO 接口，直接操作数据库（MyBatis）
-- **adapter/repository 包**：实现领域层定义的 Repository 接口，内部调用 dao、redis 等完成数据持久化
-- **adapter/port 包**：实现领域层定义的 Port 接口，内部调用 gateway 完成远程服务调用
-- **禁止**使用 `persistent` 包，Repository 实现必须放在 `adapter/repository` 下
+**⚠️ 重要规范说明：**
+
+| 包路径 | 职责 | 禁止事项 |
+|--------|------|----------|
+| `adapter/repository/` | 实现领域层 IRepository 接口，调用 dao/redis | ❌ 禁止放 DAO 操作代码 |
+| `adapter/port/` | 实现领域层 IPort 接口，调用 gateway | ❌ 禁止直接操作数据库 |
+| `dao/` | DAO 接口 + PO 对象，直接操作数据库 | ❌ 禁止放 Repository 实现 |
+| `redis/` | Redis 操作封装（RedisTemplate） | ❌ 禁止放 Spring 配置类 |
+| `config/` | Spring 配置类（线程池、OkHttp 等） | ❌ 禁止放 Redis 操作代码 |
+
+**❌ 严格禁止的错误包名：**
+- `persistent/` — 错误，Repository 实现必须放在 `adapter/repository/`
+- `scenario/` — 错误，DAO 操作必须放在 `dao/`，不能放在其他包
+- `persistent/repository/` — 错误，不存在此结构
+- `config/` 下放 Redis 操作 — 错误，Redis 操作放 `redis/`
 
 ## 目录职责
 
@@ -50,7 +61,96 @@
 | `dao/po/` | PO 对象 | 数据库映射 | 与数据库表字段一一对应 |
 | `gateway/` | HTTP/RPC 客户端 | OkHttp / Retrofit | 远程服务调用客户端 |
 | `gateway/dto/` | 远程调用 DTO | JSON 序列化 | 远程请求/响应数据传输对象 |
+| `redis/` | Redis 操作封装 | RedisTemplate | 封装 Redis 读写操作，供 adapter/repository 调用 |
+| `config/` | Spring 配置类 | Spring Bean | 线程池、OkHttp、MyBatis 等配置，不放 Redis 操作 |
 | `mybatis/mapper/` | Mapper XML | MyBatis XML | SQL 映射配置文件 |
+
+## Redis 包规范
+
+`redis/` 包负责封装 Redis 操作，供 `adapter/repository/` 调用。
+
+```java
+package cn.{company}.infrastructure.redis;
+
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Redis 操作服务
+ * 
+ * 职责：封装 RedisTemplate 操作，提供统一的 Redis 读写接口
+ * 调用方：adapter/repository/ 中的 Repository 实现类
+ */
+@Service
+public class RedisService {
+
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 设置值（带过期时间）
+     */
+    public void setValue(String key, Object value, long timeout, TimeUnit unit) {
+        redisTemplate.opsForValue().set(key, value, timeout, unit);
+    }
+
+    /**
+     * 获取值
+     */
+    public Object getValue(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
+
+    /**
+     * 删除 key
+     */
+    public Boolean delete(String key) {
+        return redisTemplate.delete(key);
+    }
+
+    /**
+     * 判断 key 是否存在
+     */
+    public Boolean hasKey(String key) {
+        return redisTemplate.hasKey(key);
+    }
+
+    /**
+     * 原子自增
+     */
+    public Long increment(String key, long delta) {
+        return redisTemplate.opsForValue().increment(key, delta);
+    }
+
+    /**
+     * 设置过期时间
+     */
+    public Boolean expire(String key, long timeout, TimeUnit unit) {
+        return redisTemplate.expire(key, timeout, unit);
+    }
+}
+```
+
+**Redis 配置（放在 `app` 模块的 `application.yml` 中）：**
+
+```yaml
+spring:
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+```
+
+**⚠️ 注意**：Redis 的 `RedisTemplate` Bean 配置（序列化等）放在 `config/` 包下，但 Redis 的读写操作封装放在 `redis/` 包下。
 
 ## DAO 与 PO
 
@@ -625,42 +725,87 @@ public class UserPO {
     private Integer status;
 }
 
-// ✅ DAO 接口清晰定义数据库操作
+// ✅ DAO 接口清晰定义数据库操作，放在 dao/ 包
 @Mapper
 public interface IUserDao {
     UserPO selectById(Long id);
     int insert(UserPO po);
 }
 
-// ✅ Gateway 封装 HTTP 调用
+// ✅ Repository 实现放在 adapter/repository/，调用 dao 和 redis
+@Repository
+public class UserRepository implements IUserRepository {
+    @Resource
+    private IUserDao userDao;
+    @Resource
+    private RedisService redisService;
+    
+    @Override
+    public UserEntity queryById(Long id) {
+        UserPO po = userDao.selectById(id);
+        return convert(po);
+    }
+}
+
+// ✅ Redis 操作封装放在 redis/ 包
 @Service
-public class ProductGatewayService {
-    public ProductResponseDTO queryProduct(String productId) { }
+public class RedisService {
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public void setValue(String key, Object value, long timeout, TimeUnit unit) {
+        redisTemplate.opsForValue().set(key, value, timeout, unit);
+    }
+}
+
+// ✅ config/ 只放 Spring 配置类（线程池、OkHttp、RedisTemplate Bean 等）
+@Configuration
+public class RedisConfig {
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+        // 配置序列化方式
+    }
 }
 ```
 
 ### ❌ 避免做法
 
 ```java
-// ❌ PO 包含业务逻辑
+// ❌ 错误1：在 persistent/ 包下创建 Repository 实现
+// 包名：cn.xxx.infrastructure.persistent.repository.UserRepository
+// 正确：cn.xxx.infrastructure.adapter.repository.UserRepository
+
+// ❌ 错误2：在 scenario/ 包下写 DAO 操作
+// 包名：cn.xxx.infrastructure.scenario.UserScenario（内部调用 DAO）
+// 正确：DAO 操作只能放在 dao/ 包，Repository 实现放在 adapter/repository/
+
+// ❌ 错误3：在 config/ 包下写 Redis 读写操作
+@Configuration
+public class RedisConfig {
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public void setValue(String key, Object value) {  // ❌ 操作代码不应在 config/
+        redisTemplate.opsForValue().set(key, value);
+    }
+}
+// 正确：Redis 操作封装放在 redis/ 包的 RedisService 中
+
+// ❌ 错误4：PO 包含业务逻辑
 public class UserPO {
     public boolean isActive() {  // ❌ 应该放在 Domain 层
         return this.status == 1;
     }
 }
 
-// ❌ DAO 包含业务逻辑
-@Mapper
-public interface IUserDao {
-    public void createUser(UserPO po) {
-        // ❌ 这里不应该有业务逻辑
-    }
-}
-
-// ❌ Gateway 返回内部对象
-public class ProductGatewayService {
-    public ProductEntity getProduct() {  // ❌ 应该返回 DTO
-        return productDao.selectById();
+// ❌ 错误5：Repository 直接操作数据库（绕过 DAO）
+@Repository
+public class UserRepository implements IUserRepository {
+    @Resource
+    private JdbcTemplate jdbcTemplate;  // ❌ 应该通过 DAO 接口操作
+    
+    public UserEntity queryById(Long id) {
+        return jdbcTemplate.queryForObject("SELECT * FROM user WHERE id = ?", ...);
     }
 }
 ```

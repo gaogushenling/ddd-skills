@@ -28,7 +28,7 @@ Trigger 层只做三件事：
 public class OrderTrigger {
 
     @Resource
-    private IOrderCaseService orderCaseService;
+    private IOrderCase orderCaseService;
 
     @PostMapping("/create")
     public Response<OrderDTO> create(@RequestBody @Valid CreateOrderRequest request) {
@@ -60,7 +60,7 @@ public class OrderTrigger {
 public class OrderEventListener {
 
     @Resource
-    private IOrderCaseService orderCaseService;
+    private IOrderCase orderCaseService;
 
     @RabbitListener(queues = "order.created.queue")
     public void onOrderCreated(OrderCreatedEvent event) {
@@ -92,7 +92,7 @@ public class OrderEventListener {
 public class OrderJob {
 
     @Resource
-    private IOrderCaseService orderCaseService;
+    private IOrderCase orderCaseService;
 
     /**
      * 每天凌晨2点执行：自动取消超时未支付订单

@@ -33,12 +33,12 @@ Trigger 层 (HTTP/MQ/Job)
 ## 命名规范
 
 ```java
-// 接口命名
-public interface I{Domain}CaseService {}
+// 接口命名：I{Xxx}Case
+public interface I{Xxx}Case {}
 
-// 实现类命名
+// 实现类命名：{Xxx}CaseImpl
 @Service
-public class {Domain}CaseServiceImpl implements I{Domain}CaseService {}
+public class {Xxx}CaseImpl implements I{Xxx}Case {}
 
 // 内部 Node 命名（复杂流程时使用）
 @Service("{domain}{业务}Node")
@@ -49,6 +49,10 @@ public class {业务}Node extends AbstractCaseSupport {}
 public class Default{Domain}CaseFactory {}
 ```
 
+**⚠️ 命名约束：**
+- Case 接口：`I{Xxx}Case`（不是 `I{Xxx}CaseService`）
+- Case 实现：`{Xxx}CaseImpl`（不是 `{Xxx}CaseServiceImpl`）
+
 ## 包结构
 
 ```
@@ -57,17 +61,29 @@ public class Default{Domain}CaseFactory {}
 └── src/main/java/
     └── cn/{company}/cases/
         └── {domain}/
-            ├── I{Domain}CaseService.java           # 接口
+            ├── I{Xxx}Case.java                     # 接口（I{Xxx}Case 命名）
+            └── impl/
+                └── {Xxx}CaseImpl.java              # 实现（{Xxx}CaseImpl 命名）
+```
+
+**复杂流程（Node 编排）时的包结构：**
+
+```
+{project}-case/
+├── pom.xml
+└── src/main/java/
+    └── cn/{company}/cases/
+        └── {domain}/
+            ├── I{Xxx}Case.java                     # 接口
             ├── impl/
-            │   ├── {Domain}CaseServiceImpl.java   # 简单流程实现
-            │   └── {Domain}CaseServiceImpl.java    # 复杂流程：Node 编排
-            ├── node/                                # 复杂流程节点
+            │   └── {Xxx}CaseImpl.java              # 实现
+            ├── node/                                # 复杂流程节点（可选）
             │   ├── AbstractCaseSupport.java        # Node 基类
             │   ├── RootNode.java                   # 开始节点
             │   ├── {业务}Node.java                  # 业务节点
             │   └── EndNode.java                    # 结束节点
-            └── factory/
-                └── Default{Domain}CaseFactory.java # 流程工厂
+            └── factory/                             # 流程工厂（可选）
+                └── Default{Domain}CaseFactory.java
 ```
 
 ## 简单 Case 实现
@@ -78,7 +94,7 @@ public class Default{Domain}CaseFactory {}
 /**
  * 订单用例服务接口
  */
-public interface IOrderCaseService {
+public interface IOrderCase {
 
     /**
      * 创建订单
@@ -96,7 +112,7 @@ public interface IOrderCaseService {
  */
 @Service
 @Slf4j
-public class OrderCaseServiceImpl implements IOrderCaseService {
+public class OrderCaseImpl implements IOrderCase {
 
     @Resource
     private IOrderDomainService orderDomainService;
@@ -392,7 +408,7 @@ public class EndNode extends AbstractCaseSupport<String, DynamicContext, Respons
  */
 @Service
 @Slf4j
-public class OrderCaseServiceImpl implements IOrderCaseService {
+public class OrderCaseImpl implements IOrderCase {
 
     @Resource
     private DefaultOrderCaseFactory orderCaseFactory;
@@ -469,7 +485,7 @@ public class OrderCaseServiceImpl implements IOrderCaseService {
 public class OrderController {
 
     @Resource
-    private IOrderCaseService orderCaseService;
+    private IOrderCase orderCaseService;
 
     @PostMapping("/create")
     public Response<OrderDTO> create(@RequestBody @Valid CreateOrderRequest request) {
