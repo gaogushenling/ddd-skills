@@ -4,26 +4,33 @@
 
 ```
 infrastructure/
+├── adapter/
+│   ├── repository/         # Repository 实现（实现领域层 IXxxRepository 接口）
+│   │   └── TradeRepository.java
+│   └── port/               # Port 实现（实现领域层 IXxxPort 接口）
+│       └── TradePort.java
 ├── dao/
-│   ├── po/                 # 数据持久化对象
-│   │   ├── User.java
-│   │   └── base/Page.java  # 分页基类
-│   └── IUserDao.java       # MyBatis Mapper 接口
+│   ├── po/                 # 数据持久化对象（命名必须以 PO 结尾）
+│   │   ├── GroupBuyOrderPO.java
+│   │   └── GroupBuyOrderListPO.java
+│   ├── IGroupBuyOrderDao.java      # MyBatis Mapper 接口
+│   └── IGroupBuyOrderListDao.java
 ├── redis/
-│   └── IRedisService.java  # Redis 服务接口
-├── dcc/
-│   └── DCCService.java     # 分布式配置中心
-├── event/
-│   └── EventPublisher.java  # 事件发布
+│   ├── IRedisService.java  # Redis 服务接口
+│   └── RedissonService.java # Redis 服务实现（基于 Redisson）
 ├── gateway/
-│   ├── dto/                # 网关 DTO
-│   └── XxxService.java     # 外部服务适配
-└── adapter/
-    ├── repository/         # Repository 实现
-    │   ├── AbstractRepository.java
-    │   └── TradeRepository.java
-    └── port/               # Port 适配器
+│   ├── dto/                # 网关 DTO（命名以 RequestDTO/ResponseDTO 结尾）
+│   │   ├── XxxRequestDTO.java
+│   │   └── XxxResponseDTO.java
+│   └── XxxGateway.java     # 外部服务适配
+└── config/                 # Spring 配置类（线程池、OkHttp、RedisTemplate Bean 等）
+    └── InfrastructureConfig.java
 ```
+
+**⚠️ 命名规范：**
+- PO 类必须以 `PO` 结尾：`GroupBuyOrderPO`，不能是 `GroupBuyOrder`
+- Redis 操作封装放在 `redis/` 包，不能放在 `config/` 包
+- Repository 实现放在 `adapter/repository/`，不能放在 `persistent/` 或其他包
 
 ---
 
@@ -39,7 +46,7 @@ infrastructure/
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class GroupBuyOrder {
+public class GroupBuyOrderPO {
 
     private Long id;
     
@@ -97,23 +104,23 @@ public class GroupBuyOrder {
 @Mapper
 public interface IGroupBuyOrderDao {
 
-    void insert(GroupBuyOrder groupBuyOrder);
+    void insert(GroupBuyOrderPO groupBuyOrderPO);
 
     int updateAddLockCount(String teamId);
 
     int updateSubtractionLockCount(String teamId);
 
-    GroupBuyOrder queryGroupBuyProgress(String teamId);
+    GroupBuyOrderPO queryGroupBuyProgress(String teamId);
 
     int updateAddCompleteCount(String teamId);
 
     int updateOrderStatus2COMPLETE(String teamId);
 
-    List<GroupBuyOrder> queryGroupBuyTeamByTeamIds(@Param("teamIds") Set<String> teamIds);
+    List<GroupBuyOrderPO> queryGroupBuyTeamByTeamIds(@Param("teamIds") Set<String> teamIds);
 
-    int unpaid2Refund(GroupBuyOrder groupBuyOrderReq);
+    int unpaid2Refund(GroupBuyOrderPO groupBuyOrderPO);
 
-    int paid2Refund(GroupBuyOrder groupBuyOrderReq);
+    int paid2Refund(GroupBuyOrderPO groupBuyOrderPO);
 }
 ```
 
@@ -126,14 +133,14 @@ public interface IGroupBuyOrderDao {
 
 <mapper namespace="cn.bugstack.infrastructure.dao.IGroupBuyOrderDao">
 
-    <resultMap id="BaseResultMap" type="cn.bugstack.infrastructure.dao.po.GroupBuyOrder">
+    <resultMap id="BaseResultMap" type="cn.bugstack.infrastructure.dao.po.GroupBuyOrderPO">
         <id column="id" property="id"/>
         <result column="team_id" property="teamId"/>
         <result column="activity_id" property="activityId"/>
         <!-- 其他字段映射 -->
     </resultMap>
 
-    <insert id="insert" parameterType="cn.bugstack.infrastructure.dao.po.GroupBuyOrder" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" parameterType="cn.bugstack.infrastructure.dao.po.GroupBuyOrderPO" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO group_buy_order (
             team_id, activity_id, source, channel,
             original_price, deduction_price, pay_price,
@@ -180,27 +187,27 @@ public interface IGroupBuyOrderDao {
 @Override
 public List<UserGroupBuyOrderDetailEntity> queryTimeoutUnpaidOrderList() {
     // 1. 批量查询超时订单
-    List<GroupBuyOrderList> orderLists = groupBuyOrderListDao.queryTimeoutUnpaidOrderList();
+    List<GroupBuyOrderListPO> orderLists = groupBuyOrderListDao.queryTimeoutUnpaidOrderList();
     if (CollectionUtils.isEmpty(orderLists)) {
         return new ArrayList<>();
     }
 
     // 2. 提取所有 teamId
     Set<String> teamIds = orderLists.stream()
-            .map(GroupBuyOrderList::getTeamId)
+            .map(GroupBuyOrderListPO::getTeamId)
             .collect(Collectors.toSet());
 
     // 3. 批量查询团队信息
-    List<GroupBuyOrder> groupBuyOrders = groupBuyOrderDao.queryGroupBuyTeamByTeamIds(teamIds);
+    List<GroupBuyOrderPO> groupBuyOrders = groupBuyOrderDao.queryGroupBuyTeamByTeamIds(teamIds);
     
     // 4. 转 Map 便于查询
-    Map<String, GroupBuyOrder> orderMap = groupBuyOrders.stream()
-            .collect(Collectors.toMap(GroupBuyOrder::getTeamId, o -> o));
+    Map<String, GroupBuyOrderPO> orderMap = groupBuyOrders.stream()
+            .collect(Collectors.toMap(GroupBuyOrderPO::getTeamId, o -> o));
 
     // 5. 转换结果
     return orderLists.stream()
             .map(list -> {
-                GroupBuyOrder order = orderMap.get(list.getTeamId());
+                GroupBuyOrderPO order = orderMap.get(list.getTeamId());
                 // 映射逻辑
             })
             .collect(Collectors.toList());
@@ -409,8 +416,8 @@ public class TradeRepository implements ITradeRepository {
      */
     @Override
     public MarketPayOrderEntity queryMarketPayOrderEntityByOutTradeNo(String userId, String outTradeNo) {
-        GroupBuyOrderList list = groupBuyOrderListDao.queryGroupBuyOrderRecordByOutTradeNo(
-            GroupBuyOrderList.builder()
+        GroupBuyOrderListPO list = groupBuyOrderListDao.queryGroupBuyOrderRecordByOutTradeNo(
+            GroupBuyOrderListPO.builder()
                 .userId(userId)
                 .outTradeNo(outTradeNo)
                 .build()
@@ -432,7 +439,7 @@ public class TradeRepository implements ITradeRepository {
     @Override
     public MarketPayOrderEntity lockMarketPayOrder(GroupBuyOrderAggregate aggregate) {
         // 1. 构建 PO
-        GroupBuyOrder order = GroupBuyOrder.builder()
+        GroupBuyOrderPO order = GroupBuyOrderPO.builder()
                 .teamId(generateTeamId())
                 .activityId(aggregate.getPayActivityEntity().getActivityId())
                 .build();
@@ -441,7 +448,7 @@ public class TradeRepository implements ITradeRepository {
         groupBuyOrderDao.insert(order);
 
         // 3. 写入明细记录
-        GroupBuyOrderList orderList = GroupBuyOrderList.builder()
+        GroupBuyOrderListPO orderList = GroupBuyOrderListPOPO.builder()
                 .teamId(order.getTeamId())
                 .orderId(generateOrderId())
                 .userId(aggregate.getUserEntity().getUserId())

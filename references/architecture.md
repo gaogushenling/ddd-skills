@@ -117,8 +117,14 @@ public class CreateOrderRequest {
 - Manages use case flow
 
 ```java
+// Case 接口：I{Xxx}Case
+public interface IOrderCase {
+    Result createAndPay(CreateOrderCommand cmd);
+}
+
+// Case 实现：{Xxx}CaseImpl
 @Service
-public class OrderCaseService {
+public class OrderCaseImpl implements IOrderCase {
     @Resource private IOrderService orderService;
     @Resource private IPaymentService paymentService;
     

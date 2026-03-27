@@ -590,7 +590,7 @@ Domain Service 不依赖：
 ```java
 // Case 层 - 控制事务
 @Service
-public class OrderCaseServiceImpl implements IOrderCaseService {
+public class OrderCaseImpl implements IOrderCase {
 
     @Resource
     private ITradeLockOrderService tradeLockOrderService;

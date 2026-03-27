@@ -28,23 +28,23 @@ Trigger 层只做三件事：
 public class OrderTrigger {
 
     @Resource
-    private IOrderCase orderCaseService;
+    private IOrderCase orderCase;
 
     @PostMapping("/create")
     public Response<OrderDTO> create(@RequestBody @Valid CreateOrderRequest request) {
         log.info("创建订单请求: {}", request);
-        return orderCaseService.createOrder(request);
+        return orderCase.createOrder(request);
     }
 
     @PostMapping("/cancel/{orderId}")
     public Response<Void> cancel(@PathVariable Long orderId) {
         log.info("取消订单请求: orderId={}", orderId);
-        return orderCaseService.cancelOrder(orderId);
+        return orderCase.cancelOrder(orderId);
     }
 
     @GetMapping("/{orderId}")
     public Response<OrderDTO> getOrder(@PathVariable Long orderId) {
-        return orderCaseService.getOrder(orderId);
+        return orderCase.getOrder(orderId);
     }
 }
 ```
@@ -60,13 +60,13 @@ public class OrderTrigger {
 public class OrderEventListener {
 
     @Resource
-    private IOrderCase orderCaseService;
+    private IOrderCase orderCase;
 
     @RabbitListener(queues = "order.created.queue")
     public void onOrderCreated(OrderCreatedEvent event) {
         log.info("收到订单创建事件: {}", event);
         try {
-            orderCaseService.handleOrderCreated(event);
+            orderCase.handleOrderCreated(event);
         } catch (Exception e) {
             log.error("处理订单创建事件异常", e);
             // 可选：发送到死信队列
@@ -76,7 +76,7 @@ public class OrderEventListener {
     @RabbitListener(queues = "order.paid.queue")
     public void onOrderPaid(OrderPaidEvent event) {
         log.info("收到订单支付事件: {}", event);
-        orderCaseService.handleOrderPaid(event);
+        orderCase.handleOrderPaid(event);
     }
 }
 ```
@@ -92,7 +92,7 @@ public class OrderEventListener {
 public class OrderJob {
 
     @Resource
-    private IOrderCase orderCaseService;
+    private IOrderCase orderCase;
 
     /**
      * 每天凌晨2点执行：自动取消超时未支付订单
@@ -101,7 +101,7 @@ public class OrderJob {
     public void cancelTimeoutOrders() {
         log.info("开始执行超时订单取消任务");
         try {
-            orderCaseService.cancelTimeoutOrders();
+            orderCase.cancelTimeoutOrders();
             log.info("超时订单取消任务执行完成");
         } catch (Exception e) {
             log.error("超时订单取消任务执行异常", e);
@@ -114,7 +114,7 @@ public class OrderJob {
     @Scheduled(fixedRate = 3600000)
     public void syncOrderStatus() {
         log.info("开始执行订单状态同步任务");
-        orderCaseService.syncOrderStatus();
+        orderCase.syncOrderStatus();
     }
 }
 ```
@@ -127,7 +127,7 @@ public class OrderJob {
 @PostMapping("/create")
 public Response<OrderDTO> create(@RequestBody @Valid CreateOrderRequest request) {
     // 如果校验失败，Spring 会自动返回 400 错误
-    return orderCaseService.createOrder(request);
+    return orderCase.createOrder(request);
 }
 ```
 
@@ -238,7 +238,7 @@ public Response<OrderDTO> create(CreateOrderRequest request) {
 // ✅ 正确：委托给 Case 层
 @PostMapping("/create")
 public Response<OrderDTO> create(CreateOrderRequest request) {
-    return orderCaseService.createOrder(request);
+    return orderCase.createOrder(request);
 }
 ```
 
@@ -255,7 +255,7 @@ public class OrderTrigger {
         // 请求入口记录日志
         log.info("创建订单请求: userId={}, items={}", request.getUserId(), request.getItems());
         
-        Response<OrderDTO> response = orderCaseService.createOrder(request);
+        Response<OrderDTO> response = orderCase.createOrder(request);
         
         // 响应出口记录日志（敏感信息脱敏）
         log.info("创建订单响应: success={}, orderId={}", 

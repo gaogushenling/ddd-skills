@@ -485,7 +485,7 @@ public class OrderCaseImpl implements IOrderCase {
 public class OrderController {
 
     @Resource
-    private IOrderCase orderCaseService;
+    private IOrderCase orderCase;
 
     @PostMapping("/create")
     public Response<OrderDTO> create(@RequestBody @Valid CreateOrderRequest request) {
@@ -493,7 +493,7 @@ public class OrderController {
         // 1. 参数校验（@Valid）
         // 2. 调用 Case
         // 3. 返回结果
-        return orderCaseService.createOrder(request);
+        return orderCase.createOrder(request);
     }
 }
 ```
