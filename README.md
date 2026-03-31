@@ -2,6 +2,8 @@
 
 > 一套完整的 DDD 六边形架构工程搭建与开发解决方案。
 > 从项目创建、分层设计、代码规范到 DevOps 部署，覆盖工程全生命周期。
+>
+> 📦 **ClawHub 地址**: https://clawhub.ai/fuzhengwei/xfg-ddd-skills
 
 ---
 
