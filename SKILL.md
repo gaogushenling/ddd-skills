@@ -215,6 +215,419 @@ model/
 
 ---
 
+## 🔄 新功能开发完整流程
+
+当用户需要实现一个新功能时，必须按照以下分层调用流程进行开发：
+
+### 调用链路图
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           新功能开发流程                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  外部请求
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 1. Trigger 层（触发层）                                                  │
+│    职责：接收外部请求，路由转发，参数校验，不含业务逻辑                     │
+│                                                                         │
+│    • HTTP Controller  →  接收 HTTP 请求                                  │
+│    • MQ Listener      →  监听消息队列                                    │
+│    • Job/Task         →  定时任务/异步任务                               │
+│                                                                         │
+│    输出：调用 Case 层接口，或轻量场景直接调用 Domain 层                    │
+└─────────────────────────┬───────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 2. Case 层（编排层）- 可选，复杂业务需要                                  │
+│    职责：跨领域业务编排，流程串联，事务管理                                │
+│                                                                         │
+│    • 接收 Trigger 调用                                                   │
+│    • 编排多个 Domain Service 调用顺序                                     │
+│    • 处理跨领域数据转换                                                   │
+│    • 管理分布式事务（如需要）                                             │
+│                                                                         │
+│    输出：调用 Domain 层 Service 接口                                      │
+└─────────────────────────┬───────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 3. Domain 层（领域层）                                                   │
+│    职责：核心业务逻辑，业务规则校验，领域模型操作                           │
+│                                                                         │
+│    • Service 服务实现业务逻辑                                             │
+│    • Entity/Aggregate 封装业务行为                                       │
+│    • 通过 Adapter 接口（Port/Repository）与外部交互                        │
+│                                                                         │
+│    注意：Domain 层不直接依赖 Infrastructure，只依赖接口                    │
+│                                                                         │
+│    输出：调用 Adapter 接口（定义在 domain/adapter/ 下）                    │
+└─────────────────────────┬───────────────────────────────────────────────┘
+                          │ 依赖倒置：Domain 定义接口，Infrastructure 实现
+                          ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 4. Infrastructure 层（基础设施层）                                        │
+│    职责：技术实现，数据持久化，外部服务调用                                │
+│                                                                         │
+│    • adapter/repository/  →  实现 Repository 接口，操作数据库              │
+│    • adapter/port/        →  实现 Port 接口，调用外部 HTTP/RPC 服务        │
+│    • dao/                 →  MyBatis DAO 接口和 PO 对象                   │
+│    • gateway/             →  HTTP/RPC 客户端，远程服务调用                 │
+│    • redis/               →  Redis 操作                                  │
+│                                                                         │
+│    输出：返回数据给 Domain 层，或执行外部调用                              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 分层职责速查表
+
+| 层级 | 职责 | 禁止做的事 | 依赖方向 |
+|------|------|-----------|----------|
+| **Trigger** | 接收请求、参数校验、路由转发 | 业务逻辑、直接操作数据库 | → API/Case/Domain |
+| **Case** | 跨域编排、流程串联、事务管理 | 直接操作数据库、外部 HTTP 调用 | → Domain |
+| **Domain** | 业务规则、领域模型、逻辑编排 | 直接依赖 MyBatis/Redis/HTTP | → 只依赖接口 |
+| **Infrastructure** | 数据持久化、外部调用、技术实现 | 业务判断、业务规则 | 实现 Domain 接口 |
+
+### 开发流程检查清单
+
+当用户说"帮我实现一个 XXX 功能"时，按以下顺序检查：
+
+#### Step 1: 确定入口方式（Trigger）
+
+询问用户或根据需求判断：
+
+```
+□ HTTP API 接口？  →  创建 Controller
+□ MQ 消息监听？    →  创建 MQ Listener
+□ 定时任务？       →  创建 Job
+□ 异步任务？       →  创建 Task/Worker
+```
+
+#### Step 2: 判断是否需要 Case 层
+
+```
+□ 涉及多个领域协作？     →  需要 Case 层
+□ 业务流程超过 3 步？    →  需要 Case 层
+□ 需要分布式事务？       →  需要 Case 层
+□ 单领域、简单业务？     →  Trigger 直接调用 Domain
+```
+
+#### Step 3: Domain 层设计
+
+```
+□ 定义 Entity/Aggregate/VO
+□ 定义 Service 接口和实现
+□ 定义 Repository 接口（数据访问）
+□ 定义 Port 接口（外部调用，如需要）
+```
+
+#### Step 4: Infrastructure 层实现
+
+```
+□ 实现 Repository 接口（adapter/repository/）
+□ 创建 DAO 接口和 PO 对象（dao/）
+□ 实现 Port 接口（adapter/port/，如需要）
+□ 创建 Gateway 客户端（gateway/，如需要）
+□ 配置 Redis 操作（redis/，如需要）
+```
+
+### 代码示例：完整调用链
+
+以"订单支付"功能为例，展示完整分层调用：
+
+#### 1. Trigger 层（HTTP Controller）
+
+```java
+@RestController
+@RequestMapping("/api/order")
+public class OrderController {
+    
+    @Resource
+    private IOrderPayCase orderPayCase;  // 复杂业务，调用 Case 层
+    
+    @PostMapping("/pay")
+    public Response<OrderPayResponse> pay(@RequestBody OrderPayRequest request) {
+        // 1. 参数校验
+        if (request.getOrderId() == null || request.getPayAmount() == null) {
+            return Response.fail("参数不完整");
+        }
+        
+        // 2. 调用 Case 层（复杂业务）
+        // 如果是简单业务，可直接调用 Domain Service
+        try {
+            OrderPayResult result = orderPayCase.execute(request);
+            return Response.success(convertToResponse(result));
+        } catch (Exception e) {
+            return Response.fail(e.getMessage());
+        }
+    }
+}
+```
+
+#### 2. Case 层（业务编排）
+
+```java
+public interface IOrderPayCase {
+    OrderPayResult execute(OrderPayRequest request) throws Exception;
+}
+
+@Service
+public class OrderPayCaseImpl implements IOrderPayCase {
+    
+    @Resource
+    private IOrderService orderService;      // 订单领域服务
+    @Resource
+    private IPaymentService paymentService;  // 支付领域服务
+    @Resource
+    private IInventoryService inventoryService; // 库存领域服务
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderPayResult execute(OrderPayRequest request) throws Exception {
+        log.info("执行订单支付流程，订单号：{}", request.getOrderId());
+        
+        // 1. 查询订单
+        OrderEntity order = orderService.queryOrder(request.getOrderId());
+        
+        // 2. 扣减库存（调用库存领域服务）
+        inventoryService.deduct(order.getProductId(), order.getQuantity());
+        
+        // 3. 执行支付（调用支付领域服务）
+        PaymentResult payment = paymentService.pay(order, request.getPayAmount());
+        
+        // 4. 更新订单状态（调用订单领域服务）
+        orderService.markPaid(order.getOrderId(), payment.getTransactionId());
+        
+        // 5. 返回结果
+        return OrderPayResult.builder()
+            .orderId(order.getOrderId())
+            .status("PAID")
+            .transactionId(payment.getTransactionId())
+            .build();
+    }
+}
+```
+
+#### 3. Domain 层（领域服务）
+
+```java
+// 订单领域服务接口
+public interface IOrderService {
+    OrderEntity queryOrder(String orderId);
+    void markPaid(String orderId, String transactionId);
+}
+
+// 订单领域服务实现
+@Service
+public class OrderServiceImpl implements IOrderService {
+    
+    @Resource
+    private IOrderRepository orderRepository;  // 依赖 Repository 接口，非实现
+    
+    @Override
+    public OrderEntity queryOrder(String orderId) {
+        return orderRepository.queryById(orderId);
+    }
+    
+    @Override
+    public void markPaid(String orderId, String transactionId) {
+        OrderEntity order = orderRepository.queryById(orderId);
+        // 业务规则校验
+        if (order.getStatus() != OrderStatus.PENDING_PAY) {
+            throw new BusinessException("订单状态不正确，无法支付");
+        }
+        // 执行业务逻辑
+        order.pay(transactionId);  // Entity 封装业务行为
+        orderRepository.save(order);
+    }
+}
+
+// 支付领域服务
+public interface IPaymentService {
+    PaymentResult pay(OrderEntity order, BigDecimal amount);
+}
+
+@Service
+public class PaymentServiceImpl implements IPaymentService {
+    
+    @Resource
+    private IPaymentPort paymentPort;  // 依赖 Port 接口，调用外部支付网关
+    
+    @Override
+    public PaymentResult pay(OrderEntity order, BigDecimal amount) {
+        // 构建支付请求
+        PaymentRequest request = PaymentRequest.builder()
+            .orderId(order.getOrderId())
+            .amount(amount)
+            .build();
+        
+        // 调用外部支付服务（通过 Port 接口）
+        return paymentPort.executePayment(request);
+    }
+}
+```
+
+#### 4. Infrastructure 层（技术实现）
+
+```java
+// Repository 实现 - 订单数据访问
+@Repository
+public class OrderRepositoryImpl implements IOrderRepository {
+    
+    @Resource
+    private IOrderDao orderDao;  // MyBatis DAO
+    @Resource
+    private StringRedisTemplate redisTemplate;
+    
+    @Override
+    public OrderEntity queryById(String orderId) {
+        // 先查缓存
+        String cacheKey = "order:" + orderId;
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return JSON.parseObject(cached, OrderEntity.class);
+        }
+        
+        // 再查数据库
+        OrderPO po = orderDao.queryById(orderId);
+        OrderEntity entity = convertToEntity(po);
+        
+        // 写入缓存
+        redisTemplate.opsForValue().set(cacheKey, JSON.toJSONString(entity), 30, TimeUnit.MINUTES);
+        
+        return entity;
+    }
+    
+    @Override
+    public void save(OrderEntity entity) {
+        OrderPO po = convertToPO(entity);
+        orderDao.update(po);
+        
+        // 更新缓存
+        redisTemplate.opsForValue().set("order:" + entity.getOrderId(), 
+            JSON.toJSONString(entity), 30, TimeUnit.MINUTES);
+    }
+}
+
+// Port 实现 - 外部支付网关调用
+@Component
+public class PaymentPortImpl implements IPaymentPort {
+    
+    @Resource
+    private PaymentGateway paymentGateway;  // HTTP 客户端
+    
+    @Override
+    public PaymentResult executePayment(PaymentRequest request) {
+        // 调用外部支付服务
+        PaymentGatewayRequest gatewayRequest = convertToGatewayRequest(request);
+        PaymentGatewayResponse response = paymentGateway.pay(gatewayRequest);
+        
+        if (!response.isSuccess()) {
+            throw new PaymentException("支付失败：" + response.getErrorMsg());
+        }
+        
+        return PaymentResult.builder()
+            .transactionId(response.getTransactionId())
+            .status("SUCCESS")
+            .build();
+    }
+}
+```
+
+### 常见问题与纠正
+
+#### ❌ 错误1：Trigger 层直接调用 Repository
+
+```java
+// 错误示例
+@RestController
+public class OrderController {
+    @Resource
+    private IOrderRepository orderRepository;  // ❌ 直接依赖 Repository
+    
+    @PostMapping("/order")
+    public Response create(@RequestBody OrderRequest request) {
+        // 业务逻辑散落在 Controller
+        OrderEntity order = new OrderEntity();
+        order.setStatus("CREATED");
+        orderRepository.save(order);  // ❌ 直接操作数据库
+        return Response.success();
+    }
+}
+```
+
+**纠正**：Trigger 层只负责接收请求和路由，业务逻辑应下沉到 Domain 层。
+
+#### ❌ 错误2：Domain Service 直接依赖 DAO
+
+```java
+// 错误示例
+@Service
+public class OrderServiceImpl implements IOrderService {
+    @Resource
+    private IOrderDao orderDao;  // ❌ 直接依赖 DAO，违反分层
+    
+    public OrderEntity queryOrder(String orderId) {
+        OrderPO po = orderDao.queryById(orderId);  // ❌ 直接操作数据库
+        return convert(po);
+    }
+}
+```
+
+**纠正**：Domain 层应依赖 Repository 接口，由 Infrastructure 层实现。
+
+#### ❌ 错误3：Infrastructure 层包含业务逻辑
+
+```java
+// 错误示例
+@Repository
+public class OrderRepositoryImpl implements IOrderRepository {
+    
+    public void save(OrderEntity entity) {
+        // ❌ 在 Repository 中做业务判断
+        if (entity.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("金额必须大于0");  // 业务异常不应在这里抛
+        }
+        orderDao.update(convertToPO(entity));
+    }
+}
+```
+
+**纠正**：业务判断应在 Domain 层完成，Infrastructure 层只负责数据读写。
+
+#### ❌ 错误4：跨域直接调用 Repository
+
+```java
+// 错误示例
+@Service
+public class OrderServiceImpl implements IOrderService {
+    @Resource
+    private IInventoryRepository inventoryRepository;  // ❌ 跨域依赖 Repository
+    
+    public void createOrder(OrderEntity order) {
+        // 直接操作库存领域的数据
+        InventoryPO inventory = inventoryRepository.queryByProductId(order.getProductId());
+        // ...
+    }
+}
+```
+
+**纠正**：跨域操作应通过 Case 层编排，或调用目标领域的 Service 接口。
+
+### 总结口诀
+
+```
+Trigger 只路由，Case 做编排
+Domain 管业务，Infra 做实现
+接口定义在 Domain，实现放在 Infra 层
+依赖永远向内指，Domain 是核心
+```
+
+---
+
 ## 📦 新功能开发规范
 
 当用户需要增加新功能时，按照以下决策流程进行开发：
