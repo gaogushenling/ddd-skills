@@ -22,18 +22,291 @@
 
 ---
 
-## 解决什么问题
+## 环境准备
 
-| 阶段 | 问题 | 解决方式 |
-|------|------|----------|
-| **工程搭建** | 多模块怎么划分、pom 怎么配 | 脚手架一键生成标准工程 |
-| **分层设计** | 各层职责边界不清晰 | 明确的分层规范与依赖规则 |
-| **领域建模** | Entity/Aggregate/VO 怎么写 | 完整的模板与示例代码 |
-| **接口设计** | Repository/Port 定义在哪层 | 六边形架构端口适配器规范 |
-| **复杂业务** | 多领域协作怎么编排 | Case 层编排模式 |
-| **设计模式** | 策略/责任链怎么落地 | Domain 层模式指南 |
-| **基础设施** | DAO/PO/Gateway 怎么组织 | Infrastructure 层规范 |
-| **DevOps** | Docker 部署怎么配 | 标准 docker-compose 模板 |
+本技能包配套的脚手架需要以下环境：
+
+| 工具 | 版本要求 | 安装方式 |
+|------|----------|----------|
+| **JDK** | 17+ | [Eclipse Temurin](https://adoptium.net/) / `brew install openjdk@17` |
+| **Maven** | 3.8.x | [官方下载](https://maven.apache.org/download.cgi) / `brew install maven` |
+
+### 验证安装
+
+```bash
+java -version        # 应显示 17.x.x
+mvn -version         # 应显示 3.8.x
+```
+
+### 配置国内镜像（推荐）
+
+编辑 `~/.m2/settings.xml` 配置阿里云镜像，加速依赖下载：
+
+```xml
+<mirrors>
+  <mirror>
+    <id>aliyunmaven</id>
+    <name>阿里云公共仓库</name>
+    <url>https://maven.aliyun.com/repository/public</url>
+    <mirrorOf>central</mirrorOf>
+  </mirror>
+</mirrors>
+```
+
+---
+
+## 使用技巧
+
+### 一、创建项目
+
+#### 方式一：AI 对话创建（推荐）
+
+在 QClaw 中直接说：
+
+```
+帮我在 /path/to/workspace 创建一个 DDD 项目，名称为 xfg-xxx
+```
+
+AI 会引导确认参数并自动生成完整工程。
+
+**对话示例**：
+
+```
+用户：帮我创建一个 DDD 项目
+AI：好的，我来帮您创建 DDD 项目。请问您希望将项目创建在哪个目录？
+     例如：
+     1) /Users/xxx/projects
+     2) /Users/xxx/Documents
+     3) 其他路径（请直接输入）
+
+用户：创建在 /Users/xxx/projects 下
+AI：确认在 /Users/xxx/projects 下创建项目，开始执行...
+```
+
+#### 方式二：Maven 命令行创建
+
+```bash
+mvn archetype:generate \
+  -DarchetypeGroupId=io.github.fuzhengwei \
+  -DarchetypeArtifactId=ddd-scaffold-std-jdk17 \
+  -DarchetypeVersion=1.8 \
+  -DarchetypeRepository=https://maven.xiaofuge.cn/ \
+  -DgroupId=cn.bugstack \
+  -DartifactId=your-project-name \
+  -Dversion=1.0.0-SNAPSHOT \
+  -Dpackage=cn.bugstack.your.project \
+  -B
+```
+
+#### 方式三：IDEA 图形界面创建
+
+<details>
+<summary>展开查看配置步骤</summary>
+
+1. 编辑 `~/.m2/settings.xml` 添加脚手架仓库：
+
+```xml
+<profiles>
+  <profile>
+    <id>xfg-archetype</id>
+    <repositories>
+      <repository>
+        <id>xfg-archetype-repo</id>
+        <url>https://maven.xiaofuge.cn/</url>
+        <releases><enabled>true</enabled></releases>
+        <snapshots><enabled>false</enabled></snapshots>
+      </repository>
+    </repositories>
+    <pluginRepositories>
+      <pluginRepository>
+        <id>xfg-archetype-plugin-repo</id>
+        <url>https://maven.xiaofuge.cn/</url>
+        <releases><enabled>true</enabled></releases>
+        <snapshots><enabled>false</enabled></snapshots>
+      </pluginRepository>
+    </pluginRepositories>
+  </profile>
+</profiles>
+
+<activeProfiles>
+  <activeProfile>xfg-archetype</activeProfile>
+</activeProfiles>
+```
+
+2. 执行 `mvn archetype:update-local-catalog` 更新本地目录
+
+3. IDEA → `File → New → Project → Maven Archetype` → 搜索 `ddd-scaffold-std-jdk17`
+
+4. 若列表未出现，点击 **Add Archetype** 手动填写：
+   - GroupId：`io.github.fuzhengwei`
+   - ArtifactId：`ddd-scaffold-std-jdk17`
+   - Version：`1.8`
+
+</details>
+
+---
+
+### 二、开发功能
+
+项目创建后，按以下流程与 AI 协作开发：
+
+#### 1. 创建领域模型
+
+告诉 AI 你要创建什么：
+
+```
+帮我在 xfg-form 项目中创建一个表单提交领域，包含：
+- 表单实体（FormEntity）：表单ID、表单名称、创建人、状态
+- 表单状态枚举（FormStatusEnumVO）：草稿、已发布、已归档
+- 表单提交值对象（FormSubmitVO）：字段ID、字段值
+```
+
+AI 会自动生成：
+- `domain/form/model/entity/FormEntity.java`
+- `domain/form/model/valobj/FormStatusEnumVO.java`
+- `domain/form/model/valobj/FormSubmitVO.java`
+
+#### 2. 创建仓储接口
+
+```
+为 FormEntity 创建仓储接口，支持：
+- 根据ID查询表单
+- 保存表单
+- 更新表单状态
+```
+
+AI 生成：
+- `domain/form/adapter/repository/IFormRepository.java`
+- `infrastructure/adapter/repository/FormRepositoryImpl.java`
+- `infrastructure/dao/IFormDao.java`
+- `infrastructure/dao/po/FormPO.java`
+
+#### 3. 创建领域服务
+
+```
+创建表单服务，实现以下能力：
+- 创建表单（校验名称唯一性，初始状态为草稿）
+- 发布表单（状态从草稿变为已发布）
+- 提交表单数据（校验表单已发布，保存提交记录）
+```
+
+AI 生成：
+- `domain/form/service/IFormService.java`
+- `domain/form/service/impl/FormServiceImpl.java`
+
+#### 4. 复杂业务编排（Case 层）
+
+当业务涉及多个领域协作时：
+
+```
+创建一个表单审批 Case，流程如下：
+1. 查询表单配置
+2. 校验用户权限
+3. 执行审批逻辑
+4. 发送审批通知
+5. 记录审批日志
+```
+
+AI 生成：
+- `cases/form/approval/IFormApprovalCase.java`
+- `cases/form/approval/impl/FormApprovalCaseImpl.java`
+
+#### 5. 添加 HTTP 接口
+
+```
+为表单模块添加 HTTP 接口：
+- POST /api/form/create - 创建表单
+- GET /api/form/{formId} - 查询表单详情
+- POST /api/form/submit - 提交表单数据
+```
+
+AI 生成：
+- `trigger/http/FormController.java`
+
+---
+
+### 三、设计模式落地
+
+在 DDD 中使用设计模式，直接告诉 AI：
+
+#### 策略模式
+
+```
+表单审批有多种策略：
+- 自动审批：无需人工，直接通过
+- 人工审批：需要管理员审核
+- 条件审批：根据金额阈值决定
+
+使用策略模式实现，在 EnumVO 中定义策略路由。
+```
+
+#### 责任链模式
+
+```
+表单提交需要经过以下校验：
+1. 表单存在性校验
+2. 表单状态校验（已发布）
+3. 必填字段校验
+4. 字段格式校验
+
+使用责任链模式实现，支持动态组装校验链。
+```
+
+---
+
+### 四、项目部署
+
+#### 1. 本地启动
+
+```bash
+# 进入项目目录
+cd your-project
+
+# 编译打包
+mvn clean install -DskipTests
+
+# 启动应用
+cd your-project-app
+mvn spring-boot:run
+```
+
+#### 2. Docker 部署
+
+项目已包含标准部署配置，直接执行：
+
+```bash
+# 1. 进入部署目录
+cd docs/dev-ops
+
+# 2. 启动基础环境（MySQL、Redis）
+docker-compose -f docker-compose-environment-aliyun.yml up -d
+
+# 3. 等待 MySQL 就绪（约30秒）
+sleep 30
+
+# 4. 初始化数据库
+docker exec -i mysql mysql -uroot -p123456 < mysql/sql/your_project.sql
+
+# 5. 构建应用镜像
+cd ../../your-project-app
+docker build -t system/your-project:1.0.0 .
+
+# 6. 启动应用
+cd ../docs/dev-ops
+docker-compose -f docker-compose-app.yml up -d
+
+# 7. 验证部署
+curl http://localhost:8080/actuator/health
+```
+
+#### 3. 生产环境部署
+
+生产环境建议：
+- 使用 `application-prod.yml` 配置
+- 配置外部 MySQL、Redis 连接
+- 使用阿里云镜像加速：`registry.cn-hangzhou.aliyuncs.com/xfg-studio/`
+
+详细配置见 [references/devops-deployment.md](references/devops-deployment.md)
 
 ---
 
@@ -125,80 +398,6 @@ infrastructure/
 │   └── dto/                     # 远程调用 DTO
 └── redis/                       # Redis 配置
 ```
-
----
-
-## 快速创建项目
-
-### 方式一：通过 AI 对话（推荐）
-
-在 QClaw 中直接说：
-
-```
-帮我在 /path/to/workspace 创建一个 DDD 项目，名称为 xfg-xxx
-```
-
-AI 会引导确认参数并自动生成完整工程。
-
-### 方式二：Maven 命令行
-
-```bash
-mvn archetype:generate \
-  -DarchetypeGroupId=io.github.fuzhengwei \
-  -DarchetypeArtifactId=ddd-scaffold-std-jdk17 \
-  -DarchetypeVersion=1.8 \
-  -DarchetypeRepository=https://maven.xiaofuge.cn/ \
-  -DgroupId=cn.bugstack \
-  -DartifactId=your-project-name \
-  -Dversion=1.0.0-SNAPSHOT \
-  -Dpackage=cn.bugstack.your.project \
-  -B
-```
-
-### 方式三：IDEA 图形界面
-
-将脚手架仓库配置到 `~/.m2/settings.xml`，即可在 IDEA 的 **New Project → Maven Archetype** 中直接选用。
-
-<details>
-<summary>展开查看 settings.xml 配置</summary>
-
-```xml
-<profiles>
-  <profile>
-    <id>xfg-archetype</id>
-    <repositories>
-      <repository>
-        <id>xfg-archetype-repo</id>
-        <name>小傅哥 DDD 脚手架仓库</name>
-        <url>https://maven.xiaofuge.cn/</url>
-        <releases><enabled>true</enabled></releases>
-        <snapshots><enabled>false</enabled></snapshots>
-      </repository>
-    </repositories>
-    <pluginRepositories>
-      <pluginRepository>
-        <id>xfg-archetype-plugin-repo</id>
-        <url>https://maven.xiaofuge.cn/</url>
-        <releases><enabled>true</enabled></releases>
-        <snapshots><enabled>false</enabled></snapshots>
-      </pluginRepository>
-    </pluginRepositories>
-  </profile>
-</profiles>
-
-<activeProfiles>
-  <activeProfile>xfg-archetype</activeProfile>
-</activeProfiles>
-```
-
-配置后执行 `mvn archetype:update-local-catalog` 更新本地目录。
-
-在 IDEA 中若列表未出现，点击 **Add Archetype** 手动填写：
-- GroupId：`io.github.fuzhengwei`
-- ArtifactId：`ddd-scaffold-std-jdk17`
-- Version：`1.8`
-
-</details>
 
 ---
 
